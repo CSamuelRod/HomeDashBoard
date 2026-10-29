@@ -7,15 +7,15 @@
 <style>
 :root{--bg:#f1ede2;--bgg:linear-gradient(160deg,#f5f1e6 0%,#e8f1e2 100%);--hd:#2f5d46;--p:#fbf9f3;--ink:#23302a;--mute:#79857b;--line:#ddd6c4;--g:#4f9a6b;--r:#d9644a}
 *{box-sizing:border-box}
-html,body{margin:0;height:100%}
+html,body{margin:0;height:100%;overflow:hidden}
 body{display:flex;background:var(--bgg);color:var(--ink);font:17px/1.4 "Segoe UI",Roboto,Arial,sans-serif}
-#side{width:96px;background:#f0f4f9;border-right:1px solid var(--line);display:flex;flex-direction:column;padding:10px 6px;gap:6px}
+#side{overflow-y:auto;min-height:0;width:96px;background:#f0f4f9;border-right:1px solid var(--line);display:flex;flex-direction:column;padding:10px 6px;gap:6px}
 .nv{position:relative;border:0;background:none;color:var(--mute);padding:12px 2px;border-radius:14px;font:600 11px inherit;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
 .nv i{display:block;font-style:normal;font-size:28px;margin-bottom:2px}
 .nv.on{background:#111c26;color:#fff}
 .bd{position:absolute;top:4px;right:14px;min-width:20px;height:20px;border-radius:10px;background:var(--r);color:#fff;font-size:12px;line-height:20px;text-align:center}
 .bd:empty{display:none}
-main{flex:1;overflow:auto;padding:20px 28px}
+main{flex:1;min-height:0;overflow:auto;padding:20px 28px 110px}
 h1{font:400 40px Georgia,serif;margin:0 0 12px}
 h3{margin:0 0 8px;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
 .sub{font:italic 20px Georgia,serif;color:var(--mute)}
@@ -106,6 +106,14 @@ h1{color:var(--hd)}
 .night .nv.on{background:#2a3644}
 .night #side{background:#0f151c;border-right-color:#243040}
 .night .nv{color:#8592a0}
+@media(max-height:640px){.nv{padding:6px 2px}.nv i{font-size:22px}.clock{font-size:72px}}
+.sm{min-width:40px;height:40px;border-radius:10px;border:2px solid var(--line);background:#fffdf7;font-weight:700}
+.q{min-width:28px;text-align:center;font-weight:700;font-size:20px}
+.bar{height:14px;border-radius:7px;background:#e4dccb;overflow:hidden;margin:8px 0}
+.bar i{display:block;height:100%;background:var(--g)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0;text-align:center;color:var(--mute);font-size:13px}
+.stats b{display:block;font:700 26px Georgia,serif;color:var(--ink)}
+.night .sm{background:#18212b;color:var(--ink)}.night .bar{background:#243040}
 </style>
 </head>
 <body>
@@ -115,11 +123,13 @@ h1{color:var(--hd)}
 <button class="nv" data-t="mes"><i>🗓️</i>Mes</button>
 <button class="nv" data-t="compra"><i>🛒</i>Compra<span class="bd" id="b-compra"></span></button>
 <button class="nv" data-t="tareas"><i>✅</i>Tareas<span class="bd" id="b-tareas"></span></button>
+<button class="nv" data-t="fitness"><i>🏃</i>Fitness</button>
 </div>
 <main id="m"></main>
 <script>
 var KEY='casa-v2',S={tasks:[],shop:[],phone:''},tab='hoy',W=null,WERR=false,HOY=0;
 try{var r=localStorage.getItem(KEY);if(r)S=JSON.parse(r)}catch(e){}
+S.fit=S.fit||{};S.fit.goal=S.fit.goal||{per:'dia',km:5};S.fit.runs=S.fit.runs||[];S.fit.routine=S.fit.routine||[];S.fit.done=S.fit.done||{};
 S.events=S.events||[];S.notes=S.notes||[];S.night=S.night==='on'?'on':'off';
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
@@ -205,6 +215,43 @@ function vMes(){
  h+='<div class="card" style="margin-top:14px"><h3>'+f.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'})+'</h3>';
  h+=l2.length?l2.map(function(e){return'<div class="row"><button class="ck'+(e.imp?' imp':'')+'"'+(e.imp?'':' style="color:#5b7a96"')+' data-a="eimp" data-id="'+e.id+'">★</button><span class="t">'+esc(e.text)+'</span><button class="x" data-a="edel" data-id="'+e.id+'">✕</button></div>'}).join(''):'<div class="mute">Sin eventos este día</div>';
  return h+'<form data-f="event"><input class="g" name="t" placeholder="Nuevo evento (ej. cumpleaños)" required><input type="date" name="d" value="'+SEL+'"><label><input type="checkbox" name="i"> Importante (cuenta atrás)</label><button class="btn">Añadir</button></form></div>';}
+var FT='run',RM=0;
+var EX=[['Piernas',['Sentadilla','Sentadilla sumo','Sentadilla con salto','Sentadilla búlgara','Sentadilla isométrica','Zancada','Zancada lateral','Zancada inversa','Puente de glúteo','Elevación de talones']],
+['Flexiones',['Flexión estándar','Flexión inclinada','Flexión declinada','Flexión diamante','Flexión abierta','Flexión en pica','Flexión arquera']],
+['Dominadas',['Dominada prona','Dominada supina','Dominada neutra','Dominada asistida','Dominada australiana','Dominada negativa']],
+['Core',['Plancha','Plancha lateral','Abdominales','Elevación de piernas','Mountain climbers','Superman']],
+['Fondos y otros',['Fondos en paralelas','Fondos en banco','Burpees']]];
+function nf(n){return String(Math.round(n*100)/100).replace('.',',')}
+function inR(n){return S.fit.routine.filter(function(x){return x.name===n})[0]}
+function vFit(){
+ return'<div class="top"><h1>Fitness</h1><div><button class="btn'+(FT==='run'?'':' s')+'" data-a="ft" data-id="run">🏃 Running</button> <button class="btn'+(FT==='mus'?'':' s')+'" data-a="ft" data-id="mus">💪 Musculación</button></div></div>'+(FT==='run'?vRun():vMus());}
+function vRun(){
+ var F=S.fit,g=F.goal,now=new Date(),t0=ds(now),mo=new Date(now);mo.setDate(now.getDate()-HOY);var m0=ds(mo);mo.setDate(mo.getDate()+6);var m1=ds(mo);
+ var km=0;F.runs.forEach(function(r){if(g.per==='dia'?r.date===t0:(r.date>=m0&&r.date<=m1))km+=r.km});
+ var pc=g.km>0?Math.min(100,Math.round(km/g.km*100)):0;
+ var h='<div class="card"><h3>Meta '+(g.per==='dia'?'de hoy':'de esta semana')+'</h3><span class="cd">'+nf(km)+'</span>de '+nf(g.km)+' km · '+pc+'%<div class="bar"><i style="width:'+pc+'%"></i></div>'+(g.km>0&&km>=g.km?'<b>¡Meta cumplida! 🎉</b>':'')+
+ '<form data-f="goal"><select name="p"><option value="dia"'+(g.per==='dia'?' selected':'')+'>Por día</option><option value="semana"'+(g.per==='semana'?' selected':'')+'>Por semana</option></select><input name="k" type="number" step="0.5" min="0.5" value="'+g.km+'" style="width:100px"><button class="btn s">Guardar meta</button></form></div>';
+ h+='<div class="card"><h3>Apuntar salida</h3><form data-f="run"><input type="date" name="d" value="'+t0+'"><input name="k" type="number" step="0.01" min="0.1" placeholder="km" style="width:90px" required><input name="v" type="number" step="0.1" min="1" placeholder="km/h" style="width:90px"><button class="btn">Añadir</button></form></div>';
+ var b=new Date(now.getFullYear(),now.getMonth()+RM,1),pre=b.getFullYear()+'-'+p2(b.getMonth()+1);
+ var l=F.runs.filter(function(r){return r.date.slice(0,7)===pre}).sort(function(a,c){return a.date<c.date?1:-1}),tk=0,best=0,sv=0,nv=0;
+ l.forEach(function(r){tk+=r.km;if(r.v){sv+=r.v;nv++;if(r.v>best)best=r.v}});
+ h+='<div class="card"><div class="top"><h3 style="text-transform:capitalize">Histórico · '+b.toLocaleDateString('es-ES',{month:'long',year:'numeric'})+'</h3><div><button class="btn s" data-a="rnav" data-id="-1">‹</button> <button class="btn s" data-a="rnav" data-id="1">›</button></div></div>';
+ h+='<div class="stats"><div><b>'+nf(tk)+'</b>km totales</div><div><b>'+l.length+'</b>salidas</div><div><b>'+(best?nf(best):'–')+'</b>mejor km/h</div><div><b>'+(nv?nf(sv/nv):'–')+'</b>km/h medio</div></div>';
+ h+=l.length?l.map(function(r){return'<div class="row"><span class="t">'+r.date.slice(8)+'/'+r.date.slice(5,7)+' · <b>'+nf(r.km)+' km</b>'+(r.v?' · '+nf(r.v)+' km/h · '+Math.round(r.km/r.v*60)+' min':'')+'</span><button class="x" data-a="rdel" data-id="'+r.id+'">✕</button></div>'}).join(''):'<div class="mute">Sin salidas este mes</div>';
+ return h+'</div>';}
+function vMus(){
+ var F=S.fit,t0=ds(new Date()),done=F.done[t0],pre=t0.slice(0,7),cnt=0,k;
+ for(k in F.done)if(F.done[k]&&k.slice(0,7)===pre)cnt++;
+ var h='<div class="card"><h3>Rutina de hoy</h3>';
+ h+=F.routine.length?F.routine.map(function(x){return'<div class="row"><span class="t">'+esc(x.name)+'</span><button class="sm" data-a="rsets" data-id="'+x.id+'" data-d="-1">−</button><span class="q">'+x.sets+'</span><button class="sm" data-a="rsets" data-id="'+x.id+'" data-d="1">+</button><span class="mute">series ×</span><button class="sm" data-a="rreps" data-id="'+x.id+'" data-d="-1">−</button><span class="q">'+x.reps+'</span><button class="sm" data-a="rreps" data-id="'+x.id+'" data-d="1">+</button><button class="x" data-a="rquit" data-id="'+x.id+'">✕</button></div>'}).join(''):'<div class="mute">Elige ejercicios abajo para montar tu rutina.</div>';
+ h+='<button class="btn w" style="background:'+(done?'#8a9a8f':'#3a6b4f')+'" data-a="rdone">'+(done?'✓ Rutina completada hoy (toca para deshacer)':'Rutina completada')+'</button><div class="mute" style="margin-top:8px">Días completados este mes: '+cnt+'</div></div>';
+ h+='<h3>Ejercicios (sin peso) · toca para añadir o quitar</h3><div class="cg">';
+ EX.forEach(function(c,i){
+  h+='<div class="cat" style="background:'+TINT[i]+'"><h3>'+c[0]+'</h3>';
+  c[1].forEach(function(x){h+='<button class="chip'+(inR(x)?' on':'')+'" data-a="ex" data-n="'+esc(x)+'">'+esc(x)+'</button>'});
+  h+='</div>';
+ });
+ return h+'</div>';}
 function tf(){var h='<form data-f="task"><input class="g" name="t" placeholder="Añadir tarea o comida (ej. cena: gyozas)" required><select name="d"><option value="-1">Sin día</option>';
  DIAS.forEach(function(n,i){h+='<option value="'+i+'"'+(i===HOY?' selected':'')+'>'+n+'</option>'});
  return h+'</select><button class="btn">Añadir</button></form>';}
@@ -258,7 +305,7 @@ function vCompra(){
 function draw(){
  var a=document.activeElement;
  if(a&&a.tagName==='INPUT'&&a.value)return;
- var v={mes:vMes,hoy:vHoy,semana:vSemana,compra:vCompra,tareas:vTareas};
+ var v={fitness:vFit,mes:vMes,hoy:vHoy,semana:vSemana,compra:vCompra,tareas:vTareas};
  $('m').innerHTML=v[tab]();
  var b=$('side').children,i;
  for(i=0;i<b.length;i++)b[i].className='nv'+(b[i].getAttribute('data-t')===tab?' on':'');
@@ -296,6 +343,14 @@ document.addEventListener('click',function(e){
  else if(a==='eimp'){o=find(S.events,id);o.imp=!o.imp}
  else if(a==='ndel')rm(S.notes,id);
  else if(a==='night')S.night=S.night==='on'?'off':'on';
+ else if(a==='ft')FT=id;
+ else if(a==='rnav')RM+=parseInt(id,10);
+ else if(a==='rdel')rm(S.fit.runs,id);
+ else if(a==='ex'){var en=el.getAttribute('data-n');o=inR(en);if(o)rm(S.fit.routine,o.id);else S.fit.routine.push({id:uid(),name:en,sets:3,reps:10})}
+ else if(a==='rquit')rm(S.fit.routine,id);
+ else if(a==='rsets'){o=find(S.fit.routine,id);o.sets=Math.max(1,o.sets+parseInt(el.getAttribute('data-d'),10))}
+ else if(a==='rreps'){o=find(S.fit.routine,id);o.reps=Math.max(1,o.reps+parseInt(el.getAttribute('data-d'),10))}
+ else if(a==='rdone'){var tk=ds(new Date());if(S.fit.done[tk])delete S.fit.done[tk];else S.fit.done[tk]=true}
  else if(a==='undo'){S.shop=S.last||[];S.last=null}
  else if(a==='wa'||a==='mail'){wa(a);return}
  save();draw();});
@@ -305,7 +360,12 @@ document.addEventListener('submit',function(e){
  else if(k==='shop'&&!has(v('n')))S.shop.push({id:uid(),name:v('n'),cat:'Otros',done:false});
  else if(k==='event'){var ed=v('d')||SEL||ds(new Date()),A=new Date(),B=new Date(ed+'T12:00:00');S.events.push({id:uid(),date:ed,text:v('t'),imp:f.elements['i'].checked});SEL=ed;MO=(B.getFullYear()-A.getFullYear())*12+B.getMonth()-A.getMonth()}
  else if(k==='note')S.notes.push({id:uid(),text:v('t')});
+ else if(k==='goal')S.fit.goal={per:v('p'),km:parseFloat(v('k').replace(',','.'))||5};
+ else if(k==='run'){var rk=parseFloat(v('k').replace(',','.'));if(rk>0)S.fit.runs.push({id:uid(),date:v('d')||ds(new Date()),km:rk,v:parseFloat(v('v').replace(',','.'))||0})}
  f.reset();if(document.activeElement)document.activeElement.blur();save();draw();});
+function fit(){document.body.style.height=window.innerHeight+"px"}
+window.addEventListener("resize",fit);window.addEventListener("orientationchange",fit);fit();
+reloj();
 draw();
 </script>
 </body>
