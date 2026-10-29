@@ -114,6 +114,7 @@ h1{color:var(--hd)}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0;text-align:center;color:var(--mute);font-size:13px}
 .stats b{display:block;font:700 26px Georgia,serif;color:var(--ink)}
 .night .sm{background:#18212b;color:var(--ink)}.night .bar{background:#243040}
+[style*="capitalize"]{text-transform:none!important}[style*="capitalize"]::first-letter{text-transform:uppercase}
 </style>
 </head>
 <body>
@@ -130,6 +131,7 @@ h1{color:var(--hd)}
 var KEY='casa-v2',S={tasks:[],shop:[],phone:''},tab='hoy',W=null,WERR=false,HOY=0;
 try{var r=localStorage.getItem(KEY);if(r)S=JSON.parse(r)}catch(e){}
 S.fit=S.fit||{};S.fit.goal=S.fit.goal||{per:'dia',km:5};S.fit.runs=S.fit.runs||[];S.fit.routine=S.fit.routine||[];S.fit.done=S.fit.done||{};
+S.custom=S.custom||[];
 S.events=S.events||[];S.notes=S.notes||[];S.night=S.night==='on'?'on':'off';
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
@@ -152,8 +154,11 @@ function reloj(){var d=new Date(),m=d.getMinutes();HOY=(d.getDay()+6)%7;
  var h=$('hora'),f=$('fecha'),hr=d.getHours();
  document.body.className=S.night==='on'?'night':'';
  var nb=$('nbtn');if(nb)nb.textContent=S.night==='on'?'☀️ Quitar modo noche':'🌙 Modo noche';
- if(h)h.textContent=d.getHours()+':'+(m<10?'0':'')+m;
- if(f)f.textContent=d.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'})}
+ 
+ var tz=W&&W.timezone?W.timezone:undefined;
+ try{if(h)h.textContent=d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZone:tz});
+  if(f)f.textContent=d.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long',timeZone:tz})}
+ catch(e){if(h)h.textContent=d.getHours()+':'+(m<10?'0':'')+m;if(f)f.textContent=d.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'})}}
 setInterval(reloj,30000);
 
 function wc(c){
@@ -162,15 +167,33 @@ function wc(c){
  if(c>=51&&c<=57)return['🌦️','Llovizna'];if(c>=61&&c<=67)return['🌧️','Lluvia'];
  if(c>=71&&c<=77)return['❄️','Nieve'];if(c>=80&&c<=82)return['🌦️','Chubascos'];
  if(c>=95)return['⛈️','Tormenta'];return['🌡️','—'];}
-function loadW(){
- var x=new XMLHttpRequest();
- x.open('GET','https://api.open-meteo.com/v1/forecast?latitude=40.42&longitude=-3.70&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=7');
- x.onload=function(){try{W=JSON.parse(x.responseText);WERR=false}catch(e){WERR=true}if(tab==='hoy')draw()};
- x.onerror=function(){WERR=true;if(tab==='hoy')draw()};
- x.send();}
+var LOC=S.loc||{lat:40.42,lon:-3.70,name:'Madrid',mode:'manual'},LRES=[],LOCF=false,LMSG='';
+function xget(u,ok,ko){var x=new XMLHttpRequest();x.open('GET',u);x.onload=function(){try{ok(JSON.parse(x.responseText))}catch(e){if(ko)ko()}};x.onerror=function(){if(ko)ko()};x.send()}
+function fetchW(){
+ xget('https://api.open-meteo.com/v1/forecast?latitude='+LOC.lat+'&longitude='+LOC.lon+'&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=7',
+  function(j){W=j;WERR=false;reloj();if(tab==='hoy')draw()},
+  function(){WERR=true;if(tab==='hoy')draw()});}
+function setLoc(o){LOC=o;S.loc=o;LMSG='';save();fetchW()}
+function geo(){
+ if(!navigator.geolocation){LMSG='Este navegador no da la ubicación. Busca tu ciudad.';fetchW();return}
+ navigator.geolocation.getCurrentPosition(function(p){
+  var la=Math.round(p.coords.latitude*100)/100,lo=Math.round(p.coords.longitude*100)/100;
+  xget('https://api.bigdatacloud.net/data/reverse-geocode-client?latitude='+la+'&longitude='+lo+'&localityLanguage=es',
+   function(j){setLoc({mode:'auto',lat:la,lon:lo,name:j.city||j.locality||'Mi ubicación'})},
+   function(){setLoc({mode:'auto',lat:la,lon:lo,name:'Mi ubicación'})});
+ },function(){LMSG='No he podido obtener la ubicación (permiso o navegador). Busca tu ciudad.';fetchW();if(tab==='hoy')draw()},{timeout:15000,maximumAge:600000});}
+function loadW(){if(LOC.mode==='auto')geo();else fetchW()}
 loadW();setInterval(loadW,1800000);
 
-function wx(){
+function locBar(){
+ var h='<div style="margin-bottom:6px"><button class="btn s" data-a="locf">📍 '+esc(LOC.name||'Madrid')+(LOC.mode==='auto'?' (auto)':'')+' · cambiar</button></div>';
+ if(LMSG)h+='<div class="mute" style="margin-bottom:6px">'+esc(LMSG)+'</div>';
+ if(!LOCF)return h;
+ h+='<div class="card"><button class="btn w" style="margin:0 0 8px" data-a="geo">📍 Usar mi ubicación actual</button><form data-f="city"><input class="g" name="q" placeholder="Buscar ciudad (ej. Zúrich)" required><button class="btn">Buscar</button></form>';
+ LRES.forEach(function(r,i){h+='<button class="chip" data-a="locset" data-id="'+i+'">'+esc(r.name+(r.admin1?', '+r.admin1:'')+' · '+(r.country||''))+'</button>'});
+ return h+'</div>';}
+function wx(){return'<div>'+locBar()+wx0()+'</div>'}
+function wx0(){
  if(!W)return'<div class="mute">'+(WERR?'Sin conexión: no hay tiempo.':'Cargando el tiempo…')+'</div>';
  var c=W.current,w=wc(c.weather_code),d=W.daily,k,dt,rain='Sin lluvia a la vista esta semana.';
  for(k=0;k<d.time.length;k++){if(d.precipitation_probability_max[k]>=50){rain='Lluvia probable '+(k===0?'hoy':'el '+new Date(d.time[k]+'T12:00:00').toLocaleDateString('es-ES',{weekday:'long'}))+'.';break}}
@@ -252,6 +275,9 @@ function vMus(){
   h+='</div>';
  });
  return h+'</div>';}
+function inCat(n){var x=n.toLowerCase(),r=false;PRE.forEach(function(c){c[1].forEach(function(y){if(y.toLowerCase()===x)r=true})});S.custom.forEach(function(z){if(z.name.toLowerCase()===x)r=true});return r}
+function npForm(){var h='<form data-f="newprod"><input class="g" name="n" placeholder="Añadir producto…" required><select name="c">';PRE.forEach(function(c){h+='<option>'+c[0]+'</option>'});return h+'</select><label style="width:100%"><input type="checkbox" name="s" checked> Guardar en el catálogo para otras veces</label><button class="btn">Añadir a la lista</button></form>'}
+function custList(){if(!S.custom.length)return'';return'<div class="card"><h3>Productos que has añadido</h3>'+S.custom.map(function(z){return'<div class="row"><span class="t">'+esc(z.name)+' <small>'+esc(z.cat)+'</small></span><button class="x" data-a="cdel" data-id="'+z.id+'">✕</button></div>'}).join('')+'</div>'}
 function tf(){var h='<form data-f="task"><input class="g" name="t" placeholder="Añadir tarea o comida (ej. cena: gyozas)" required><select name="d"><option value="-1">Sin día</option>';
  DIAS.forEach(function(n,i){h+='<option value="'+i+'"'+(i===HOY?' selected':'')+'>'+n+'</option>'});
  return h+'</select><button class="btn">Añadir</button></form>';}
@@ -285,9 +311,9 @@ function has(n){var x=n.toLowerCase();return S.shop.filter(function(s){return s.
 function vCompra(){
  var h='<h1>Se acabó… <span class="sub">Toca lo que se acabe y pasa a la lista</span></h1><div class="cols"><div class="cg">';
  PRE.forEach(function(c,i){
-  var n=c[1].filter(function(x){return has(x)}).length;
+  var L=c[1].concat(S.custom.filter(function(z){return z.cat===c[0]}).map(function(z){return z.name})),n=L.filter(function(x){return has(x)}).length;
   h+='<div class="cat" style="background:'+TINT[i]+'"><h3>'+c[0]+(n?'<span class="bg">'+n+'</span>':'')+'</h3>';
-  c[1].forEach(function(x){h+='<button class="chip'+(has(x)?' on':'')+'" data-a="chip" data-c="'+esc(c[0])+'" data-n="'+esc(x)+'">'+esc(x)+'</button>'});
+  L.forEach(function(x){h+='<button class="chip'+(has(x)?' on':'')+'" data-a="chip" data-c="'+esc(c[0])+'" data-n="'+esc(x)+'">'+esc(x)+'</button>'});
   h+='</div>';
  });
  h+='</div><div><div class="card"><h3>Lista de la compra · '+pend().length+'</h3>';
@@ -298,8 +324,9 @@ function vCompra(){
   l.forEach(function(s){h+='<div class="row'+(s.done?' ok':'')+'"><button class="ck'+(s.done?' on':'')+'" data-a="sdone" data-id="'+s.id+'">'+(s.done?'✓':'')+'</button><span class="t">'+esc(s.name)+'</span><button class="x" data-a="sdel" data-id="'+s.id+'">✕</button></div>'});
  });
  if(!any)h+='<div class="mute">Aún no falta nada.</div>';
- h+='<form data-f="shop"><input class="g" name="n" placeholder="+ Otra cosa" required><button class="btn">Añadir</button></form><form><button type="button" class="btn s" data-a="sclean">Quitar comprados</button></form>'+(S.last&&S.last.length?'<form><button type="button" class="btn s" data-a="undo">Recuperar la última lista enviada</button></form>':'')+'</div>';
- h+='<div class="card"><h3>Enviar la lista</h3><input id="mail" class="g" style="width:100%;margin-bottom:8px" placeholder="Correo de quien hace la compra" value="'+esc(S.mail||'')+'"><button class="btn w" style="background:#c4553f" data-a="mail">Enviar por Gmail</button><input id="tel" class="g" style="width:100%;margin-top:14px" placeholder="WhatsApp (opcional): teléfono con prefijo" value="'+esc(S.phone||'')+'"><button class="btn w" data-a="wa">Enviar por WhatsApp</button></div></div></div>';
+ h+=''+npForm()+'<form><button type="button" class="btn s" data-a="sclean">Quitar comprados</button></form>'+(S.last&&S.last.length?'<form><button type="button" class="btn s" data-a="undo">Recuperar la última lista enviada</button></form>':'')+'</div>';
+ h+=custList();
+ h+='<div class="card"><h3>Enviar la lista</h3><input id="mail" class="g" style="width:100%;margin-bottom:8px" placeholder="Correo de quien hace la compra" value="'+esc(S.mail||'')+'"><button class="btn w" style="background:#c4553f" data-a="mail">Enviar por Gmail</button></div></div></div>';
  return h;}
 
 function draw(){
@@ -316,13 +343,13 @@ function find(a,id){for(var i=0;i<a.length;i++)if(String(a[i].id)===String(id))r
 function rm(a,id){for(var i=0;i<a.length;i++)if(String(a[i].id)===String(id)){a.splice(i,1);return}}
 
 function wa(mode){
- var t=$('tel'),em=$('mail');S.phone=t?t.value.replace(/\D/g,''):'';S.mail=em?em.value.trim():'';save();
+ var em=$('mail');S.mail=em?em.value.trim():'';save();
  var p=pend();if(!p.length){alert('No falta nada en la lista.');return}
  var msg='🛒 Lista de la compra · '+new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'})+'\n';
  PRE.map(function(c){return c[0]}).concat(['Otros']).forEach(function(c){
   var l=p.filter(function(s){return s.cat===c});
   if(l.length)msg+='\n'+c+':\n'+l.map(function(s){return'- '+s.name}).join('\n')+'\n';});
- if(mode==='mail')window.open('https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(S.mail)+'&su='+encodeURIComponent('Lista de la compra')+'&body='+encodeURIComponent(msg),'_blank');else window.open('https://wa.me/'+S.phone+'?text='+encodeURIComponent(msg),'_blank');S.last=S.shop.slice();S.shop=[];save();if(document.activeElement)document.activeElement.blur();draw();}
+ if(mode==='mail')window.open('https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(S.mail)+'&su='+encodeURIComponent('Lista de la compra')+'&body='+encodeURIComponent(msg),'_blank');S.last=S.shop.slice();S.shop=[];save();if(document.activeElement)document.activeElement.blur();draw();}
 
 document.addEventListener('click',function(e){
  var el=e.target;while(el&&el.getAttribute&&!el.getAttribute('data-t')&&!el.getAttribute('data-a'))el=el.parentNode;if(!el||!el.getAttribute)return;
@@ -351,8 +378,12 @@ document.addEventListener('click',function(e){
  else if(a==='rsets'){o=find(S.fit.routine,id);o.sets=Math.max(1,o.sets+parseInt(el.getAttribute('data-d'),10))}
  else if(a==='rreps'){o=find(S.fit.routine,id);o.reps=Math.max(1,o.reps+parseInt(el.getAttribute('data-d'),10))}
  else if(a==='rdone'){var tk=ds(new Date());if(S.fit.done[tk])delete S.fit.done[tk];else S.fit.done[tk]=true}
+ else if(a==='cdel')rm(S.custom,id);
+ else if(a==='locf')LOCF=!LOCF;
+ else if(a==='geo'){LMSG='Buscando tu ubicación…';LOCF=false;geo()}
+ else if(a==='locset'){var lr=LRES[parseInt(id,10)];if(lr){setLoc({mode:'manual',lat:lr.latitude,lon:lr.longitude,name:lr.name});LOCF=false;LRES=[]}}
  else if(a==='undo'){S.shop=S.last||[];S.last=null}
- else if(a==='wa'||a==='mail'){wa(a);return}
+ else if(a==='mail'){wa(a);return}
  save();draw();});
 document.addEventListener('submit',function(e){
  e.preventDefault();var f=e.target,k=f.getAttribute('data-f'),v=function(n){return f.elements[n].value.trim()};
@@ -360,6 +391,8 @@ document.addEventListener('submit',function(e){
  else if(k==='shop'&&!has(v('n')))S.shop.push({id:uid(),name:v('n'),cat:'Otros',done:false});
  else if(k==='event'){var ed=v('d')||SEL||ds(new Date()),A=new Date(),B=new Date(ed+'T12:00:00');S.events.push({id:uid(),date:ed,text:v('t'),imp:f.elements['i'].checked});SEL=ed;MO=(B.getFullYear()-A.getFullYear())*12+B.getMonth()-A.getMonth()}
  else if(k==='note')S.notes.push({id:uid(),text:v('t')});
+ else if(k==='newprod'){var pn=v('n'),pc=v('c');if(pn){if(!has(pn))S.shop.push({id:uid(),name:pn,cat:pc,done:false});if(f.elements['s'].checked&&!inCat(pn))S.custom.push({id:uid(),name:pn,cat:pc})}}
+ else if(k==='city')xget('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(v('q'))+'&count=5&language=es&format=json',function(j){LRES=j.results||[];LMSG=LRES.length?'':'No encuentro esa ciudad.';draw()},function(){LMSG='Sin conexión para buscar.';draw()});
  else if(k==='goal')S.fit.goal={per:v('p'),km:parseFloat(v('k').replace(',','.'))||5};
  else if(k==='run'){var rk=parseFloat(v('k').replace(',','.'));if(rk>0)S.fit.runs.push({id:uid(),date:v('d')||ds(new Date()),km:rk,v:parseFloat(v('v').replace(',','.'))||0})}
  f.reset();if(document.activeElement)document.activeElement.blur();save();draw();});
