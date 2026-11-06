@@ -1,3 +1,0 @@
-[build]
-  command = "echo \"var FIREBASE_CONFIG = { apiKey: '$apiKey', authDomain: '$authDomain', projectId: '$projectId', storageBucket: '$storageBucket', messagingSenderId: '$messagingSenderId', appId: '$appId' };\" > js/firebase-config.js"
-  publish = "."
